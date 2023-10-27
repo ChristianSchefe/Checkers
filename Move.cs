@@ -7,19 +7,24 @@ public struct Move
 
     public int tx;
     public int ty;
-    public Piece? capturedPiece;
+    public List<Piece> capturedPieces;
+    public bool promotePiece;
 
-    public Move(int x, int y, int tx, int ty, Piece? capturedPiece = null)
+    public Move(int x, int y, int tx, int ty, List<Piece> capturedPieces, bool promotePiece = false)
     {
         this.x = x;
         this.y = y;
         this.tx = tx;
         this.ty = ty;
-        this.capturedPiece = capturedPiece;
+        this.capturedPieces = capturedPieces;
+        this.promotePiece = promotePiece;
     }
 
     public override readonly string ToString()
     {
-        return capturedPiece is Piece piece ? $"{x}, {y} -> {tx}, {ty} (Take {piece.x}, {piece.y})" : $"{x}, {y} -> {tx}, {ty}";
+        var moveStr = $"{x}, {y} -> {tx}, {ty}";
+        if (promotePiece) moveStr += " (Queen)";
+        foreach (var piece in capturedPieces) moveStr += $" (Take {piece.x}, {piece.y})";
+        return moveStr;
     }
 }
