@@ -5,31 +5,25 @@ public class Board
     public int size;
     public Piece?[,] grid;
     public bool playerToMove;
+    public int pieceDiff;
 
     public Board(int size)
     {
         this.size = size;
         grid = new Piece?[size, size];
         playerToMove = true;
-        SetupPieces();
+        pieceDiff = 0;
     }
 
     public void SetupPieces()
     {
         for (int y = 0; y < size; y++)
         {
-
             for (int x = 0; x < size; x++)
             {
                 if ((x + y) % 2 != 0) continue;
-                if (y < 3)
-                {
-                    grid[x, y] = new(x, y, true, false);
-                }
-                else if (y >= size - 3)
-                {
-                    grid[x, y] = new(x, y, false, false);
-                }
+                if (y < 3) grid[x, y] = new(x, y, true, false);
+                else if (y >= size - 3) grid[x, y] = new(x, y, false, false);
             }
         }
     }
@@ -42,7 +36,11 @@ public class Board
         piece.y = move.ty;
         piece.isQueen |= move.promotePiece;
 
-        foreach (var cpiece in move.capturedPieces) grid[cpiece.x, cpiece.y] = null;
+        if (move.capturedPiece is Piece cpiece)
+        {
+            grid[cpiece.x, cpiece.y] = null;
+            pieceDiff += piece.team ? 1 : -1;
+        }
 
         grid[move.x, move.y] = null;
         grid[move.tx, move.ty] = piece;
@@ -56,98 +54,33 @@ public class Board
         piece.y = move.y;
         piece.isQueen &= !move.promotePiece;
 
-        foreach (var cpiece in move.capturedPieces) grid[cpiece.x, cpiece.y] = cpiece;
-
+        if (move.capturedPiece is Piece cpiece)
+        {
+            grid[cpiece.x, cpiece.y] = cpiece;
+            pieceDiff -= piece.team ? 1 : -1;
+        }
         grid[move.tx, move.ty] = null;
         grid[move.x, move.y] = piece;
     }
 
-    public List<Move> GetAllValidMoves(bool team)
+    public void DoFullMove(FullMove move)
     {
-        var validMoves = new List<Move>();
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                if (!TryGetPiece(x, y, out var piece) || piece.team != team) continue;
-                validMoves.AddRange(GetAllCaptureMoves(x, y));
-            }
-        }
-
-        if (validMoves.Count > 0) return validMoves;
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                if (!TryGetPiece(x, y, out var piece) || piece.team != team) continue;
-                if (CanMakeNormalMove(piece, -1, out var leftMove)) validMoves.Add(leftMove);
-                if (CanMakeNormalMove(piece, 1, out var rightMove)) validMoves.Add(rightMove);
-            }
-        }
-        return validMoves;
+        for (int i = 0; i < move.moves.Count; i++) DoMove(move.moves[i]);
+        playerToMove = !playerToMove;
     }
 
-    public List<Move> GetAllCaptureMoves(int x, int y)
+    public void UndoFullMove(FullMove move)
     {
-        var moves = new List<Move>();
-        if (!TryGetPiece(x, y, out var piece)) return moves;
-
-        if (CanMakeCaptureMove(piece, -1, 1, out var leftUpCaptureMove)) moves.AddRange(ExtendCaptureMove(leftUpCaptureMove));
-        if (CanMakeCaptureMove(piece, 1, 1, out var rightUpCaptureMove)) moves.AddRange(ExtendCaptureMove(rightUpCaptureMove));
-        if (CanMakeCaptureMove(piece, -1, -1, out var leftDownCaptureMove)) moves.AddRange(ExtendCaptureMove(leftDownCaptureMove));
-        if (CanMakeCaptureMove(piece, 1, -1, out var rightDownCaptureMove)) moves.AddRange(ExtendCaptureMove(rightDownCaptureMove));
-
-        return moves;
+        for (int i = move.moves.Count - 1; i >= 0; i--) UndoMove(move.moves[i]);
+        playerToMove = !playerToMove;
     }
 
-    public List<Move> ExtendCaptureMove(Move prevMove)
+
+    public bool IsValidMove(Move move)
     {
-        DoMove(prevMove);
-
-        var moves = GetAllCaptureMoves(prevMove.tx, prevMove.ty);
-        var extendedMoves = new List<Move>();
-
-        foreach (var move in moves)
-        {
-            var m = new Move(prevMove.x, prevMove.y, move.tx, move.ty, prevMove.capturedPieces);
-            m.capturedPieces.AddRange(move.capturedPieces);
-            extendedMoves.Add(m);
-        }
-
-        UndoMove(prevMove);
-
-        if (extendedMoves.Count == 0)
-        {
-            extendedMoves.Add(prevMove);
-            return extendedMoves;
-        }
-
-        var newExtendedMoves = new List<Move>();
-        foreach (var move in extendedMoves)
-        {
-            newExtendedMoves.AddRange(ExtendCaptureMove(move));
-        }
-        return newExtendedMoves;
-    }
-
-    public bool CanMakeNormalMove(Piece piece, int dx, out Move move)
-    {
-        move = new(piece.x, piece.y, piece.x + dx, piece.y + (piece.team ? 1 : -1), new(), false);
-        move.promotePiece = !piece.isQueen && piece.team ? move.ty == size - 1 : move.ty == 0;
-        return IsValidPos(move.tx, move.ty) && !TryGetPiece(move.tx, move.ty, out _);
-    }
-
-    public bool CanMakeCaptureMove(Piece piece, int dx, int dy, out Move move)
-    {
-        var sx = piece.x + dx;
-        var sy = piece.y + dy;
-        move = new(piece.x, piece.y, piece.x + dx * 2, piece.y + dy * 2, new(), false);
-        move.promotePiece = !piece.isQueen && piece.team ? move.ty == size - 1 : move.ty == 0;
-        if (!TryGetPiece(sx, sy, out var blockingPiece) || blockingPiece.team == piece.team) return false;
-        move.capturedPieces = new List<Piece>() { blockingPiece };
-        return IsValidPos(move.tx, move.ty) && !TryGetPiece(move.tx, move.ty, out _);
+        if (!IsValidPos(move.x, move.y) || !IsValidPos(move.tx, move.ty)) return false;
+        if (!HasPiece(move.x, move.y) || HasPiece(move.tx, move.ty)) return false;
+        return true;
     }
 
     public bool TryGetPiece(int x, int y, out Piece piece)
@@ -163,7 +96,11 @@ public class Board
         return false;
     }
 
-    public string Print()
+    public bool HasPiece(int x, int y) => grid[x, y].HasValue;
+
+    public bool IsValidPos(int x, int y) => x >= 0 && y >= 0 && x < size && y < size;
+
+    public void Print()
     {
         var lines = "";
         for (int y = size - 1; y >= 0; y--)
@@ -175,11 +112,6 @@ public class Board
             }
             lines += line + "\n";
         }
-        return lines;
-    }
-
-    public bool IsValidPos(int x, int y)
-    {
-        return !(x < 0 || y < 0 || x >= size || y >= size);
+        Console.WriteLine(lines);
     }
 }

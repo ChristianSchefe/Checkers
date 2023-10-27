@@ -2,29 +2,38 @@ namespace Gameplay;
 
 public struct Move
 {
-    public int x;
-    public int y;
-
-    public int tx;
-    public int ty;
-    public List<Piece> capturedPieces;
+    public int x, y, tx, ty;
+    public Piece? capturedPiece;
     public bool promotePiece;
 
-    public Move(int x, int y, int tx, int ty, List<Piece> capturedPieces, bool promotePiece = false)
+    public Move(int x, int y, int tx, int ty, bool promotePiece = false)
     {
         this.x = x;
         this.y = y;
         this.tx = tx;
         this.ty = ty;
-        this.capturedPieces = capturedPieces;
         this.promotePiece = promotePiece;
+        capturedPiece = null;
+    }
+}
+
+public struct FullMove
+{
+    public List<Move> moves;
+
+    public FullMove(List<Move> moves)
+    {
+        this.moves = moves;
     }
 
     public override readonly string ToString()
     {
-        var moveStr = $"{x}, {y} -> {tx}, {ty}";
-        if (promotePiece) moveStr += " (Queen)";
-        foreach (var piece in capturedPieces) moveStr += $" (Take {piece.x}, {piece.y})";
-        return moveStr;
+        if (moves.Count <= 0) return "";
+        var s = $"({moves[0].x + 1} {moves[0].y + 1})";
+        foreach (var move in moves)
+        {
+            s += $"->({move.tx + 1} {move.ty + 1})";
+        }
+        return s;
     }
 }
